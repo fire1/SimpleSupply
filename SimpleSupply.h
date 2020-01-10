@@ -338,7 +338,7 @@ private:
 /**
  * UI
  */
-    class display {
+    class Display {
         char char3[4];
 
         /**
@@ -389,7 +389,7 @@ private:
         }
     };
 
-    display ui;
+    Display ui;
 };
 
 void rotaryInterrupt() {
