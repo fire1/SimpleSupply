@@ -38,6 +38,7 @@
 #define timeoutInterval 1500
 #endif
 
+//#define noDisplay
 
 void static rotaryInterrupt();
 
@@ -51,13 +52,12 @@ const uint8_t pinEncoderA = 3;
 const uint8_t pinEncoderB = 4;
 const uint8_t pinEncoderC = 2;
 unsigned long time = 0, lastTime = 0, btnLowTime = 0;
-const uint16_t refreshRate = 250;
+const uint16_t refreshRate = 450;
 
 const uint8_t lcdRow1 = 14;
 const uint8_t lcdRow2 = 28;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 
-const String maxAmp = "MAX";
 
 RotaryEncoder enc(pinEncoderA, pinEncoderB);
 #ifndef noDisplay
@@ -75,6 +75,7 @@ class SimpleSupply {
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
     uint8_t pwmVolt = 0, lastPwm;
+    int rawVolt, rawAmps;
     float setVolt = 0, setAmps = 0, outVolt, outAmps;
     unsigned long timeout = 0;
     unsigned long soundTime = 0;
@@ -85,18 +86,26 @@ class SimpleSupply {
 public:
     void begin() {
 
-        pinMode(pinVoltPwm, OUTPUT);
         // Pin 9/10 timer setup
         TCCR1B = TCCR1B & B11111000 | B00000010;    // set timer 1 divisor to     8 for PWM frequency of  3921.16 Hz
         Serial.println(F("Booting..."));
         pinMode(pinVoltInp, INPUT);
         pinMode(pinAmpsInp, INPUT);
+        pinMode(pinVoltPwm, OUTPUT);
+        pinMode(pinTone, OUTPUT);
 
         enableInterrupt(pinEncoderA, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderB, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderC, buttonInterrupt, CHANGE);
 #ifndef noDisplay
         u8g2.begin();
+        u8g2.setFont(defFont);
+        u8g2.setPowerSave(0);
+
+        u8g2.firstPage();
+        do {
+            u8g2.drawStr(0, 0, "Test");
+        } while (u8g2.nextPage());
 #endif
         tone(pinTone, 2000);
         delay(150);
@@ -113,17 +122,20 @@ public:
     }
 
     void draw() {
-        current();
+        this->current();
+
 
 #ifndef noDisplay
-        u8g2.clearBuffer();
         u8g2.firstPage();
         do {
-            ui.showVoltages(outVolt);
-            ui.showAmperage(outAmps);
+            u8g2.drawStr(0, 0, "Test");
+//            ui.showVoltages(outVolt);
+//            ui.showAmperage(outAmps);
         } while (u8g2.nextPage());
 
 #endif
+
+        this->debug();
     }
 
 
@@ -159,6 +171,22 @@ private:
 
 
         }
+    }
+
+    void debug() {
+        Serial.println();
+        Serial.print(F(" V set "));
+        Serial.print(setVolt);
+        Serial.print(F(" A set "));
+        Serial.print(setAmps);
+        Serial.print(F(" V raw "));
+        Serial.print(rawVolt);
+        Serial.print(F(" A raw "));
+        Serial.print(rawAmps);
+        Serial.print(F(" V out "));
+        Serial.print(outVolt);
+        Serial.print(F(" A out "));
+        Serial.print(outAmps);
     }
 
     void ping() {
@@ -329,6 +357,8 @@ private:
  * Controlling
  */
     void power() {
+        rawVolt = analogRead(pinVoltInp);
+        rawAmps = analogRead(pinAmpsInp);
         if (lastPwm != pwmVolt) {
             analogWrite(pinVoltPwm, pwmVolt);
             lastPwm = pwmVolt;
@@ -368,9 +398,11 @@ private:
          */
         void showVoltages(float voltage) {
             displayFloat(voltage, char3);
+#ifndef noDisplay
             u8g2.setCursor(2, lcdRow1);
             u8g2.print(F("V: "));
             u8g2.print(char3);
+#endif;
         }
 
         /**
@@ -378,14 +410,21 @@ private:
          * @param amperage
          */
         void showAmperage(float amperage) {
+#ifndef noDisplay
             u8g2.setCursor(2, lcdRow2);
             u8g2.print(F("A: "));
+#endif
             if (amperage == 0) {
-                maxAmp.toCharArray(char3, 3);
+#ifndef noDisplay
+                u8g2.print("MAX");
+#endif
             } else {
+#ifndef noDisplay
                 displayFloat(amperage, char3);
+                u8g2.print(char3);
+#endif
             }
-            u8g2.print(char3);
+
         }
     };
 
