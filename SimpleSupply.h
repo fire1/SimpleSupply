@@ -71,15 +71,16 @@ class SimpleSupply {
     enum class menus {
         main = 0, sub = 1, power = 2
     };
-    tones play = tones::none;
-    menus menu = menus::main;
+
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
     uint8_t pwmVolt = 0, lastPwm;
     float setVolt = 0, setAmps = 0, outVolt, outAmps;
     unsigned long timeout = 0;
     unsigned long soundTime = 0;
-    char char3[4];
+    tones play = tones::none;
+    menus menu = menus::main;
+
 
 public:
     void begin() {
@@ -118,8 +119,8 @@ public:
         u8g2.clearBuffer();
         u8g2.firstPage();
         do {
-            showVoltages(outVolt);
-            showAmperage(outAmps);
+            ui.showVoltages(outVolt);
+            ui.showAmperage(outAmps);
         } while (u8g2.nextPage());
 
 #endif
@@ -335,50 +336,60 @@ private:
     }
 
 /**
- * Converts float to lower decimal
- * @param value
- * @param output
- * @return
+ * UI
  */
-    char displayFloat(float value, char *output) {
-        if (value < -99) {
-            value = -99;
-        }
-        int dig1 = int(value) * 10; // 210
-        int dig2 = int((value * 10) - dig1);
-        dig1 = dig1 / 10;
-        if (dig2 < 0) {
-            dig2 = dig2 * -1;
-        }
-        sprintf(output, "%02d.%1d", dig1, dig2);
-    }
+    class display {
+        char char3[4];
 
-/**
- * Shows voltage on screen
- * @param voltage
- */
-    void showVoltages(float voltage) {
-        displayFloat(voltage, char3);
-        u8g2.setCursor(2, lcdRow1);
-        u8g2.print(F("V: "));
-        u8g2.print(char3);
-    }
-
-/**
- * Shows amperage on screen
- * @param amperage
- */
-    void showAmperage(float amperage) {
-        u8g2.setCursor(2, lcdRow2);
-        u8g2.print(F("A: "));
-        if (amperage == 0) {
-            maxAmp.toCharArray(char3, 3);
-        } else {
-            displayFloat(amperage, char3);
+        /**
+         * Converts float to lower decimal
+         * @param value
+         * @param output
+         * @return
+            */
+        char displayFloat(float value, char *output) {
+            if (value < -99) {
+                value = -99;
+            }
+            int dig1 = int(value) * 10; // 210
+            int dig2 = int((value * 10) - dig1);
+            dig1 = dig1 / 10;
+            if (dig2 < 0) {
+                dig2 = dig2 * -1;
+            }
+            sprintf(output, "%02d.%1d", dig1, dig2);
         }
-        u8g2.print(char3);
 
-    }
+    public:
+
+        /**
+         * Shows voltage on screen
+         * @param voltage
+         */
+        void showVoltages(float voltage) {
+            displayFloat(voltage, char3);
+            u8g2.setCursor(2, lcdRow1);
+            u8g2.print(F("V: "));
+            u8g2.print(char3);
+        }
+
+        /**
+         * Shows amperage on screen
+         * @param amperage
+         */
+        void showAmperage(float amperage) {
+            u8g2.setCursor(2, lcdRow2);
+            u8g2.print(F("A: "));
+            if (amperage == 0) {
+                maxAmp.toCharArray(char3, 3);
+            } else {
+                displayFloat(amperage, char3);
+            }
+            u8g2.print(char3);
+        }
+    };
+
+    display ui;
 };
 
 void rotaryInterrupt() {
