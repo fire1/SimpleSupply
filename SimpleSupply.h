@@ -20,6 +20,16 @@
 
 #endif
 
+
+#include <U8g2lib.h>
+
+#ifndef _U8G2LIB_HH
+
+#include "../libraries/U8g2/src/U8g2lib.h"
+
+#endif
+
+
 #ifndef maxVoltage
 #define maxVoltage 20
 #endif
@@ -27,6 +37,7 @@
 #ifndef timeoutInterval
 #define timeoutInterval 1500
 #endif
+
 
 void static rotaryInterrupt();
 
@@ -42,8 +53,16 @@ const uint8_t pinEncoderC = 2;
 unsigned long time = 0, lastTime = 0, btnLowTime = 0;
 const uint16_t refreshRate = 250;
 
+const uint8_t lcdRow1 = 14;
+const uint8_t lcdRow2 = 28;
+const uint8_t *defFont = u8g2_font_crox3h_tf;
+
+const String maxAmp = "MAX";
 
 RotaryEncoder enc(pinEncoderA, pinEncoderB);
+#ifndef noDisplay
+U8G2_SSD1306_128X32_UNIVISION_2_HW_I2C u8g2(U8G2_R2);
+#endif
 
 class SimpleSupply {
     enum class tones {
@@ -60,7 +79,7 @@ class SimpleSupply {
     float setVolt = 0, setAmps = 0, outVolt, outAmps;
     unsigned long timeout = 0;
     unsigned long soundTime = 0;
-
+    char char3[4];
 
 public:
     void begin() {
@@ -75,6 +94,14 @@ public:
         enableInterrupt(pinEncoderA, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderB, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderC, buttonInterrupt, CHANGE);
+#ifndef noDisplay
+        u8g2.begin();
+#endif
+        tone(pinTone, 2000);
+        delay(150);
+        tone(pinTone, 2400);
+        delay(150);
+        noTone(pinTone);
     }
 
     void loop() {
@@ -86,6 +113,10 @@ public:
 
     void draw() {
         current();
+#ifndef noDisplay
+        showVoltages(outVolt);
+        showAmperage(outAmps);
+#endif
     }
 
 
@@ -291,14 +322,57 @@ private:
  * Controlling
  */
     void power() {
-
-
         if (lastPwm != pwmVolt) {
             analogWrite(pinVoltPwm, pwmVolt);
             lastPwm = pwmVolt;
         }
     }
 
+/**
+ * Converts float to lower decimal
+ * @param value
+ * @param output
+ * @return
+ */
+    char displayFloat(float value, char *output) {
+        if (value < -99) {
+            value = -99;
+        }
+        int dig1 = int(value) * 10; // 210
+        int dig2 = int((value * 10) - dig1);
+        dig1 = dig1 / 10;
+        if (dig2 < 0) {
+            dig2 = dig2 * -1;
+        }
+        sprintf(output, "%02d.%1d", dig1, dig2);
+    }
+
+/**
+ * Shows voltage on screen
+ * @param voltage
+ */
+    void showVoltages(float voltage) {
+        displayFloat(voltage, char3);
+        u8g2.setCursor(2, lcdRow1);
+        u8g2.print(F("V: "));
+        u8g2.print(char3);
+    }
+
+/**
+ * Shows amperage on screen
+ * @param amperage
+ */
+    void showAmperage(float amperage) {
+        u8g2.setCursor(2, lcdRow2);
+        u8g2.print(F("A: "));
+        if (amperage == 0) {
+            maxAmp.toCharArray(char3, 3);
+        } else {
+            displayFloat(amperage, char3);
+        }
+        u8g2.print(char3);
+
+    }
 };
 
 void rotaryInterrupt() {

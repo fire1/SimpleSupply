@@ -4,6 +4,8 @@
 
 SimpleSupply supply;
 
+#define noDisplay
+
 void setup() {
     Serial.begin(9600);
     supply.begin();
@@ -16,6 +18,6 @@ void loop() {
     supply.loop();
     if (time > lastTime + refreshRate) {
         lastTime = time;
-
+        supply.draw();
     }
 }
