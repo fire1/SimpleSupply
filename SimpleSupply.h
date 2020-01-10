@@ -113,9 +113,15 @@ public:
 
     void draw() {
         current();
+
 #ifndef noDisplay
-        showVoltages(outVolt);
-        showAmperage(outAmps);
+        u8g2.clearBuffer();
+        u8g2.firstPage();
+        do {
+            showVoltages(outVolt);
+            showAmperage(outAmps);
+        } while (u8g2.nextPage());
+
 #endif
     }
 
