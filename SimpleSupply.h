@@ -61,7 +61,6 @@ const uint8_t lcdRow1 = 14;
 const uint8_t lcdRow2 = 28;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 
-int testDir;
 
 RotaryEncoder enc(pinEncoderA, pinEncoderB);
 #ifndef noDisplay
@@ -70,11 +69,12 @@ U8G2_SSD1306_128X32_UNIVISION_2_HW_I2C u8g2(U8G2_R2);
 
 class SimpleSupply {
     enum class tones {
-        none = 0, dir = 1, click = 2, hold = 3
+        none = 0, dir = 1, click = 2, hold = 3, low = 4, lows = 5
     };
     enum class menus {
         main = 0, sub = 1, power = 2
     };
+    char char3[4];
     volatile uint8_t index;
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
@@ -109,7 +109,7 @@ public:
         u8g2.begin();
         u8g2.setFont(u8g2_font_crox3h_tf);
 #endif
-        analogWrite(pinVoltPwm, 20);
+        analogWrite(pinVoltPwm, 0);
         tone(pinTone, 2000);
         delay(150);
         tone(pinTone, 2400);
@@ -132,12 +132,12 @@ public:
 #ifndef noDisplay
         u8g2.firstPage();
         do {
-//            displayFloat(voltage, char3);
-#ifndef noDisplay
-            u8g2.setCursor(2, lcdRow1);
-            u8g2.print(F("V: "));
-            u8g2.print(outVolt);
-#endif;
+            showVoltages(outVolt);
+            if (menu == menus::sub) {
+                showAmperage(setAmps);
+            } else {
+                showAmperage(outAmps);
+            }
         } while (u8g2.nextPage());
 
 #endif
@@ -236,8 +236,7 @@ private:
         Serial.print(btnLowTime);
         Serial.print(F(" DIR: "));
         Serial.print((int8_t) enc.getDirection());
-        Serial.print(F(" TEST: "));
-        Serial.print(testDir);
+
     }
 
     void ping() {
@@ -291,6 +290,20 @@ private:
             if (track(2)) sound(20400, 220);
             if (track(3)) mute();
         }
+
+        if (play == tones::low) {
+            if (track(0)) sound(1300, 800);
+            if (track(1)) mute();
+
+        }
+
+        if (play == tones::lows) {
+            if (track(0)) sound(1600, 500);
+            if (track(1)) silent(100);
+            if (track(2)) sound(1600, 520);
+            if (track(3)) mute();
+
+        }
     }
 
 /**
@@ -300,25 +313,37 @@ private:
  * @param rate
  * @return
  */
-    float changeValue(float value, RotaryEncoder::Direction direction, double rate = 1) {
+    uint8_t changeVoltValue(RotaryEncoder::Direction direction, uint8_t rate = 8) {
         int8_t dir = direction == RotaryEncoder::Direction::CLOCKWISE ? 1 : -1;
-        return (dir > 0) ? value + rate : value - rate;
+        if (pwmVolt > 58 && pwmVolt < 120)
+            rate = 1 + rate;
+        return (dir > 0) ? pwmVolt + rate : pwmVolt - rate;
+    }
+
+/**
+ * Changes values of voltage and current
+ * @param value
+ * @param direction
+ * @param rate
+ * @return
+ */
+    float changeAmpsValue(RotaryEncoder::Direction direction, float rate = 1) {
+        int8_t dir = direction == RotaryEncoder::Direction::CLOCKWISE ? 1 : -1;
+
+        return (dir > 0) ? setAmps + rate : setAmps - rate;
     }
 
 /**
  * Sets UI voltage to raw pwm
- * @param value
+ * @param pwm
  */
-    void setVoltage(float value) {
-        if (value > maxVoltage) {
-            value = 20;
+    void setPwm(uint8_t pwm) {
+
+        if (pwm > 165) {
+            pwm = 250;
         }
-        if (value >= 0 && value <= maxVoltage) {
-            setVolt = value;
-            if (value == maxVoltage) {
-                pwmVolt = 255;
-            }
-            pwmVolt = map(value * 10, 10, 205, 15, 167);
+        if (pwm >= 0 && pwm <= 250) {
+            pwmVolt = pwm;
         }
     }
 
@@ -327,7 +352,7 @@ private:
  * @param value
  */
     void setCurrent(float value) {
-
+        setAmps = value;
     }
 
 
@@ -349,45 +374,58 @@ private:
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
                         Serial.println((int8_t) direction);
-                        this->setVoltage(this->changeValue(setVolt, direction));
+                        this->setPwm(this->changeVoltValue(direction));
                         ping();
                     }
                     break;
                 case 2:// fine edit of voltage
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
-                        this->setVoltage(this->changeValue(setVolt, direction, 0.010));
+                        this->setPwm(this->changeVoltValue(direction, 1));
                         ping();
                     }
                     break;
 
-                case 4:// fine edit of current (reverse order of voltage)
-                    if (direction != RotaryEncoder::Direction::NOROTATION) {
-                        play = tones::dir;
-                        this->setCurrent(this->changeValue(setVolt, direction));
-                        ping();
-                    }
-                    break;
 
-                case 3:// edit of current
-                    if (direction != RotaryEncoder::Direction::NOROTATION) {
-                        play = tones::dir;
-                        this->setCurrent(this->changeValue(setVolt, direction, 0.010));
-                        ping();
-                    }
-                    break;
+            }
+            if (cursor > 2) {
+                cursor = 1;
             }
 
         } else if (menu == menus::sub) {
 
+            switch (cursor) {
+                case 0:
+                default://none
+                    break;
+                case 1:// fine edit of current (reverse order of voltage)
+                    if (direction != RotaryEncoder::Direction::NOROTATION) {
+                        play = tones::dir;
+                        this->setCurrent(this->changeAmpsValue(direction, 0.1));
+                        ping();
+                    }
+                    break;
+
+                case 2:// edit of current
+                    if (direction != RotaryEncoder::Direction::NOROTATION) {
+                        play = tones::dir;
+                        this->setCurrent(this->changeAmpsValue(direction, 1));
+                        ping();
+                    }
+            }
+            if (cursor > 2) {
+                cursor = 1;
+            }
         }
 
 
         //
         // Triggers timeout
-        if (time > (timeout + timeoutInterval)) {
+        if (time > (timeout + timeoutInterval) && timeout > 0) {
             cursor = 0;
             menu = menus::main;
+            play = tones::lows;
+            timeout = 0;
         }
 
     }
@@ -404,20 +442,18 @@ private:
             Serial.println(" Click ");
             btnLowTime = 0;
             btnStateReady = false;
-        } else if (btnStateReady && btnLowTime > 1000 && btnLowTime < 3000) {
+        } else if (btnStateReady && btnLowTime > 1000 && btnLowTime) {
             Serial.println();
             Serial.print(btnLowTime);
             Serial.println(" Hold ");
-            menu = menus::sub;
+            menu = (menu == menus::sub) ? menus::main : menus::sub;
             play = tones::hold;
             ping();
             btnLowTime = 0;
             btnStateReady = false;
         }
 
-        if (cursor > 3) {
-            cursor = 1;
-        }
+
     }
 
 
@@ -435,72 +471,64 @@ private:
 /**
  * UI
  */
-    class Display {
-        char char3[4];
 
-        /**
-         * Converts float to lower decimal
-         * @param value
-         * @param output
-         * @return
-            */
-        char displayFloat(float value, char *output) {
-            if (value < -99) {
-                value = -99;
-            }
-            int dig1 = int(value) * 10; // 210
-            int dig2 = int((value * 10) - dig1);
-            dig1 = dig1 / 10;
-            if (dig2 < 0) {
-                dig2 = dig2 * -1;
-            }
-            sprintf(output, "%02d.%1d", dig1, dig2);
+
+    /**
+     * Converts float to lower decimal
+     * @param value
+     * @param output
+     * @return
+        */
+    char displayFloat(float value, char *output) {
+        if (value < -99) {
+            value = -99;
         }
+        int dig1 = int(value) * 10; // 210
+        int dig2 = int((value * 10) - dig1);
+        dig1 = dig1 / 10;
+        if (dig2 < 0) {
+            dig2 = dig2 * -1;
+        }
+        sprintf(output, "%02d.%2d", dig1, dig2);
+    }
 
-    public:
+public:
 
-        /**
-         * Shows voltage on screen
-         * @param voltage
-         */
-        void showVoltages(float voltage) {
-            displayFloat(voltage, char3);
+    /**
+     * Shows voltage on screen
+     * @param voltage
+     */
+    void showVoltages(float voltage) {
+        displayFloat(voltage, char3);
 #ifndef noDisplay
-            u8g2.setCursor(2, lcdRow1);
-            u8g2.print(F("V: "));
-            u8g2.print(char3);
+        u8g2.setCursor(2, lcdRow1);
+        u8g2.print(F("V: "));
+        u8g2.print(char3);
 #endif;
+    }
+
+    /**
+     * Shows amperage on screen
+     * @param amperage
+     */
+    void showAmperage(float amperage) {
+#ifndef noDisplay
+        u8g2.setCursor(2, lcdRow2);
+        u8g2.print(F("A: "));
+        if (setAmps == 0) {
+            u8g2.print("Max");
+        } else {
+            displayFloat(amperage, char3);
+            u8g2.print(char3);
         }
-
-        /**
-         * Shows amperage on screen
-         * @param amperage
-         */
-        void showAmperage(float amperage) {
-#ifndef noDisplay
-            u8g2.setCursor(2, lcdRow2);
-            u8g2.print(F("A: "));
 #endif
-            if (amperage == 0) {
-#ifndef noDisplay
-                u8g2.print("MAX");
-#endif
-            } else {
-#ifndef noDisplay
-                displayFloat(amperage, char3);
-                u8g2.print(char3);
-#endif
-            }
 
-        }
-    };
+    }
 
-    Display ui;
 };
 
 void rotaryInterrupt() {
     enc.tick();
-    testDir++;
 }
 
 
@@ -509,6 +537,10 @@ void buttonInterrupt() {
         btnLowTime = millis();
     }
     if (digitalRead(pinEncoderC) == HIGH && btnLowTime > 0 && !btnStateReady) {
+        btnLowTime = millis() - btnLowTime;
+        btnStateReady = true;
+    }
+    if (digitalRead(pinEncoderC) == LOW && millis() - btnLowTime > 1500 && !btnStateReady) {
         btnLowTime = millis() - btnLowTime;
         btnStateReady = true;
     }
