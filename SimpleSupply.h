@@ -35,7 +35,7 @@
 #endif
 
 #ifndef timeoutInterval
-#define timeoutInterval 1500
+#define timeoutInterval 15000
 #endif
 
 //#define noDisplay
@@ -44,20 +44,24 @@ void static rotaryInterrupt();
 
 void static buttonInterrupt();
 
+volatile boolean btnStateReady = false;
 const uint8_t pinTone = 11;
 const uint8_t pinVoltPwm = 10;
 const uint8_t pinAmpsInp = A3;
 const uint8_t pinVoltInp = A2;
-const uint8_t pinEncoderA = 3;
-const uint8_t pinEncoderB = 4;
+const uint8_t pinEncoderA = 4;
+const uint8_t pinEncoderB = 3;
 const uint8_t pinEncoderC = 2;
-unsigned long time = 0, lastTime = 0, btnLowTime = 0;
-const uint16_t refreshRate = 450;
+const uint8_t pinBlinker = LED_BUILTIN;
+unsigned long time = 0, lastTime = 0;
+volatile unsigned long btnLowTime = 0;
+const uint16_t refreshRate = 1450;
 
 const uint8_t lcdRow1 = 14;
 const uint8_t lcdRow2 = 28;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 
+int testDir;
 
 RotaryEncoder enc(pinEncoderA, pinEncoderB);
 #ifndef noDisplay
@@ -81,7 +85,7 @@ class SimpleSupply {
     tones play = tones::none;
     menus menu = menus::main;
     uint32_t avrAmps = 0, avrVolt = 0;
-    unsigned long timeout = 0;
+    volatile unsigned long timeout = 0;
     unsigned long soundTime = 0;
 
 
@@ -95,17 +99,15 @@ public:
         pinMode(pinAmpsInp, INPUT);
         pinMode(pinVoltPwm, OUTPUT);
         pinMode(pinTone, OUTPUT);
+        pinMode(pinEncoderA, INPUT_PULLUP);
+        pinMode(pinEncoderB, INPUT_PULLUP);
+        pinMode(pinEncoderC, INPUT_PULLUP);
         enableInterrupt(pinEncoderA, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderB, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderC, buttonInterrupt, CHANGE);
 #ifndef noDisplay
         u8g2.begin();
         u8g2.setFont(u8g2_font_crox3h_tf);
-
-        u8g2.firstPage();
-        do {
-            u8g2.drawStr(0, 10, "Test");
-        } while (u8g2.nextPage());
 #endif
         analogWrite(pinVoltPwm, 20);
         tone(pinTone, 2000);
@@ -123,6 +125,7 @@ public:
     }
 
     void draw() {
+        digitalWrite(pinBlinker, LOW);
         this->values();
         this->current();
 
@@ -213,10 +216,6 @@ private:
     void debug() {
         Serial.println();
 
-        Serial.print(analogRead(A3));
-        Serial.print(" ");
-        Serial.print(analogRead(A2));
-        Serial.print(" ");
         Serial.print(F(" V set "));
         Serial.print(setVolt);
         Serial.print(F(" A set "));
@@ -231,12 +230,23 @@ private:
         Serial.print(outAmps);
         Serial.print(F(" PWM: "));
         Serial.print(pwmVolt);
+        Serial.print(F(" CUR: "));
+        Serial.print(cursor);
+        Serial.print(F(" BTN: "));
+        Serial.print(btnLowTime);
+        Serial.print(F(" DIR: "));
+        Serial.print((int8_t) enc.getDirection());
+        Serial.print(F(" TEST: "));
+        Serial.print(testDir);
     }
 
     void ping() {
         timeout = millis();
     }
 
+    void blink() {
+        digitalWrite(pinBlinker, HIGH);
+    }
 
     void sound(int hertz, uint16_t interval = 50) {
         tone(pinTone, 2200);
@@ -290,8 +300,9 @@ private:
  * @param rate
  * @return
  */
-    float changeValue(float value, int8_t direction, double rate = 1) {
-        return (direction > 0) ? value + rate : value - rate;
+    float changeValue(float value, RotaryEncoder::Direction direction, double rate = 1) {
+        int8_t dir = direction == RotaryEncoder::Direction::CLOCKWISE ? 1 : -1;
+        return (dir > 0) ? value + rate : value - rate;
     }
 
 /**
@@ -319,18 +330,12 @@ private:
 
     }
 
+
 /**
  * Handles values change and menu
  */
     void editor() {
-        if (btnLowTime > 0 && btnLowTime < 100) {
-            cursor++;
-            ping();
-        }
-        if (btnLowTime > 300 && btnLowTime < 1000) {
-            menu = menus::sub;
-            ping();
-        }
+        this->clicker();
 
         RotaryEncoder::Direction direction = enc.getDirection();
         //
@@ -343,14 +348,15 @@ private:
                 case 1: // edit voltage
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
-                        this->setVoltage(this->changeValue(setVolt, (int) direction));
+                        Serial.println((int8_t) direction);
+                        this->setVoltage(this->changeValue(setVolt, direction));
                         ping();
                     }
                     break;
                 case 2:// fine edit of voltage
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
-                        this->setVoltage(this->changeValue(setVolt, (int) direction, 0.010));
+                        this->setVoltage(this->changeValue(setVolt, direction, 0.010));
                         ping();
                     }
                     break;
@@ -358,7 +364,7 @@ private:
                 case 4:// fine edit of current (reverse order of voltage)
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
-                        this->setCurrent(this->changeValue(setVolt, (int) direction));
+                        this->setCurrent(this->changeValue(setVolt, direction));
                         ping();
                     }
                     break;
@@ -366,7 +372,7 @@ private:
                 case 3:// edit of current
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
-                        this->setCurrent(this->changeValue(setVolt, (int) direction, 0.010));
+                        this->setCurrent(this->changeValue(setVolt, direction, 0.010));
                         ping();
                     }
                     break;
@@ -384,6 +390,34 @@ private:
             menu = menus::main;
         }
 
+    }
+
+
+    void clicker() {
+        if (btnStateReady && btnLowTime > 0 && btnLowTime < 800) {
+            cursor++;
+            play = tones::click;
+            ping();
+            blink();
+            Serial.println();
+            Serial.print(btnLowTime);
+            Serial.println(" Click ");
+            btnLowTime = 0;
+            btnStateReady = false;
+        } else if (btnStateReady && btnLowTime > 1000 && btnLowTime < 3000) {
+            Serial.println();
+            Serial.print(btnLowTime);
+            Serial.println(" Hold ");
+            menu = menus::sub;
+            play = tones::hold;
+            ping();
+            btnLowTime = 0;
+            btnStateReady = false;
+        }
+
+        if (cursor > 3) {
+            cursor = 1;
+        }
     }
 
 
@@ -466,13 +500,17 @@ private:
 
 void rotaryInterrupt() {
     enc.tick();
+    testDir++;
 }
 
+
 void buttonInterrupt() {
-    if (digitalRead(pinEncoderC) == LOW) {
+    if (digitalRead(pinEncoderC) == LOW && !btnStateReady && btnLowTime == 0) {
         btnLowTime = millis();
-    } else {
+    }
+    if (digitalRead(pinEncoderC) == HIGH && btnLowTime > 0 && !btnStateReady) {
         btnLowTime = millis() - btnLowTime;
+        btnStateReady = true;
     }
 }
 
