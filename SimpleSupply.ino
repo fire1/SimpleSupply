@@ -11,17 +11,16 @@ void setup() {
 
 }
 
-void loop() {
+void loop_() {
     u8g2.firstPage();
     do {
-        u8g2.drawStr(0, 0, "Test");
-//            ui.showVoltages(outVolt);
-//            ui.showAmperage(outAmps);
+        u8g2.drawStr(0,10,"Hello World!");	// write something to the internal memory
     } while (u8g2.nextPage());
-    delay(200);
+
+    delay(250);
 }
 
-void loop_() {
+void loop() {
     time = millis();
     supply.loop();
     if (time > lastTime + refreshRate) {

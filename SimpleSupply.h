@@ -71,16 +71,18 @@ class SimpleSupply {
     enum class menus {
         main = 0, sub = 1, power = 2
     };
-
+    volatile uint8_t index;
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
     uint8_t pwmVolt = 0, lastPwm;
+    uint16_t avrIndex = 0;
     int rawVolt, rawAmps;
     float setVolt = 0, setAmps = 0, outVolt, outAmps;
-    unsigned long timeout = 0;
-    unsigned long soundTime = 0;
     tones play = tones::none;
     menus menu = menus::main;
+    uint32_t avrAmps = 0, avrVolt = 0;
+    unsigned long timeout = 0;
+    unsigned long soundTime = 0;
 
 
 public:
@@ -93,20 +95,19 @@ public:
         pinMode(pinAmpsInp, INPUT);
         pinMode(pinVoltPwm, OUTPUT);
         pinMode(pinTone, OUTPUT);
-
         enableInterrupt(pinEncoderA, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderB, rotaryInterrupt, CHANGE);
         enableInterrupt(pinEncoderC, buttonInterrupt, CHANGE);
 #ifndef noDisplay
         u8g2.begin();
-        u8g2.setFont(defFont);
-        u8g2.setPowerSave(0);
+        u8g2.setFont(u8g2_font_crox3h_tf);
 
         u8g2.firstPage();
         do {
-            u8g2.drawStr(0, 0, "Test");
+            u8g2.drawStr(0, 10, "Test");
         } while (u8g2.nextPage());
 #endif
+        analogWrite(pinVoltPwm, 20);
         tone(pinTone, 2000);
         delay(150);
         tone(pinTone, 2400);
@@ -115,22 +116,25 @@ public:
     }
 
     void loop() {
-        this->terminal();
+        this->parser();
+        this->inject();
         this->editor();
-        this->power();
         this->sounds();
     }
 
     void draw() {
+        this->values();
         this->current();
-
 
 #ifndef noDisplay
         u8g2.firstPage();
         do {
-            u8g2.drawStr(0, 0, "Test");
-//            ui.showVoltages(outVolt);
-//            ui.showAmperage(outAmps);
+//            displayFloat(voltage, char3);
+#ifndef noDisplay
+            u8g2.setCursor(2, lcdRow1);
+            u8g2.print(F("V: "));
+            u8g2.print(outVolt);
+#endif;
         } while (u8g2.nextPage());
 
 #endif
@@ -140,10 +144,43 @@ public:
 
 
 private:
+/**
+ * Parsing live values
+ */
+    void parser() {
+        uint32_t readVolt = 0, readAmps = 0;
+        for (index = 0; index < 20; ++index) {
+            readVolt += analogRead(pinVoltInp);
+            readAmps += analogRead(pinAmpsInp);
+            delayMicroseconds(50);
+        }
+        avrVolt += readVolt / index;
+        avrAmps += readAmps / index;
+        avrIndex++;
+        if (lastPwm != pwmVolt) {
+            // pwm 150 = 17V
+            // max 160 = 18v
+            // min 13 = 1.0v
+            analogWrite(pinVoltPwm, pwmVolt);
+            lastPwm = pwmVolt;
+        }
+    }
+
+/**
+ * Calculate average values
+ */
+    void values() {
+        rawVolt = avrVolt / avrIndex;
+        rawAmps = avrAmps / avrIndex;
+        avrIndex = 0, avrAmps = 0, avrVolt = 0;
+        outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
+        outAmps = map(rawAmps, 0, 500, 0, 1400) * 0.01;
+    }
+
     /**
      * Capture date from Serial
      */
-    void terminal() {
+    void inject() {
         if (Serial.available()) {
             String where = Serial.readStringUntil('=');
 
@@ -151,9 +188,9 @@ private:
             // Format v=<0-255>
             if (where == F("v")) {
                 uint8_t volt = Serial.readStringUntil('\n').toInt();
-                analogWrite(pinVoltPwm, volt);
+                pwmVolt = volt;
                 Serial.println();
-                Serial.print(F("SET VOLTAGE: "));
+                Serial.print(F("PWM: "));
                 Serial.print(volt);
                 Serial.println();
             }
@@ -175,6 +212,11 @@ private:
 
     void debug() {
         Serial.println();
+
+        Serial.print(analogRead(A3));
+        Serial.print(" ");
+        Serial.print(analogRead(A2));
+        Serial.print(" ");
         Serial.print(F(" V set "));
         Serial.print(setVolt);
         Serial.print(F(" A set "));
@@ -187,6 +229,8 @@ private:
         Serial.print(outVolt);
         Serial.print(F(" A out "));
         Serial.print(outAmps);
+        Serial.print(F(" PWM: "));
+        Serial.print(pwmVolt);
     }
 
     void ping() {
@@ -353,17 +397,6 @@ private:
         }
     }
 
-/**
- * Controlling
- */
-    void power() {
-        rawVolt = analogRead(pinVoltInp);
-        rawAmps = analogRead(pinAmpsInp);
-        if (lastPwm != pwmVolt) {
-            analogWrite(pinVoltPwm, pwmVolt);
-            lastPwm = pwmVolt;
-        }
-    }
 
 /**
  * UI

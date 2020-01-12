@@ -1500,7 +1500,7 @@ endfunction()
 # setup_serial_target(TARGET_NAME CMD)
 #
 #         TARGET_NAME - Target name
-#         CMD         - Serial terminal command
+#         CMD         - Serial inject command
 #
 # Creates a target (${TARGET_NAME}-serial) for launching the serial termnial.
 #
