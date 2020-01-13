@@ -47,8 +47,9 @@ void static buttonInterrupt();
 volatile boolean btnStateReady = false;
 const uint8_t pinTone = 11;
 const uint8_t pinVoltPwm = 10;
-const uint8_t pinAmpsInp = A3;
+const uint8_t pinAmpsInp = A3; // from 0 to 150ma
 const uint8_t pinVoltInp = A2;
+const uint8_t pinTempInp = A0;
 const uint8_t pinEncoderA = 4;
 const uint8_t pinEncoderB = 3;
 const uint8_t pinEncoderC = 2;
@@ -57,8 +58,8 @@ unsigned long time = 0, lastTime = 0;
 volatile unsigned long btnLowTime = 0;
 const uint16_t refreshRate = 1450;
 
-const uint8_t lcdRow1 = 14;
-const uint8_t lcdRow2 = 28;
+const uint8_t lcdRow1 = 13;
+const uint8_t lcdRow2 = 29;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 
 
@@ -74,15 +75,16 @@ class SimpleSupply {
     enum class menus {
         main = 0, sub = 1, power = 2
     };
-    char char3[4];
+
     char str[7];
     volatile uint8_t index;
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
     uint8_t pwmVolt = 0, lastPwm;
     uint16_t avrIndex = 0;
+    uint16_t rawTemp = 0;
     int rawVolt, rawAmps;
-    float setVolt = 0, setAmps = 0, outVolt, outAmps;
+    float setVolt = 0, setAmps = 0, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
     uint32_t avrAmps = 0, avrVolt = 0;
@@ -126,6 +128,8 @@ public:
     }
 
     void draw() {
+        rawTemp = analogRead(pinTempInp);
+        nowTemp = map(rawTemp, 385, 270, 370, 500) * 0.1;
         digitalWrite(pinBlinker, LOW);
         this->values();
         this->current();
@@ -133,12 +137,14 @@ public:
 #ifndef noDisplay
         u8g2.firstPage();
         do {
-            showVoltages(outVolt);
-            if (menu == menus::sub) {
-                showAmperage(outAmps);
-            } else {
-                showAmperage(outAmps);
-            }
+            if (rawTemp > 280) {
+                showVoltages(outVolt);
+                if (menu == menus::sub) {
+                    showAmperage(outAmps);
+                } else {
+                    showAmperage(outAmps);
+                }
+            } else u8g2.print(F("OVERHEAT"));
         } while (u8g2.nextPage());
 
 #endif
@@ -165,8 +171,12 @@ private:
             // pwm 150 = 17V
             // max 160 = 18v
             // min 13 = 1.0v
-            analogWrite(pinVoltPwm, pwmVolt);
-            lastPwm = pwmVolt;
+            if (rawTemp > 280) {
+                analogWrite(pinVoltPwm, pwmVolt);
+                lastPwm = pwmVolt;
+            } else {
+                analogWrite(pinVoltPwm, 0);
+            }
         }
     }
 
@@ -237,6 +247,10 @@ private:
         Serial.print(btnLowTime);
         Serial.print(F(" DIR: "));
         Serial.print((int8_t) enc.getDirection());
+        Serial.print(F(" TMP: "));
+        Serial.print(rawTemp);
+        Serial.print(F(" / "));
+        Serial.print(nowTemp);
 
     }
 
