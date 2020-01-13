@@ -75,6 +75,7 @@ class SimpleSupply {
         main = 0, sub = 1, power = 2
     };
     char char3[4];
+    char str[7];
     volatile uint8_t index;
     uint8_t soundIndex = 0;
     uint8_t cursor = 0;
@@ -134,7 +135,7 @@ public:
         do {
             showVoltages(outVolt);
             if (menu == menus::sub) {
-                showAmperage(setAmps);
+                showAmperage(outAmps);
             } else {
                 showAmperage(outAmps);
             }
@@ -177,7 +178,7 @@ private:
         rawAmps = avrAmps / avrIndex;
         avrIndex = 0, avrAmps = 0, avrVolt = 0;
         outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
-        outAmps = map(rawAmps, 0, 500, 0, 1400) * 0.01;
+        outAmps = map(rawAmps, 387, 633, 92, 150) * 0.001;
     }
 
     /**
@@ -473,24 +474,6 @@ private:
  */
 
 
-    /**
-     * Converts float to lower decimal
-     * @param value
-     * @param output
-     * @return
-        */
-    char displayFloat(float value, char *output) {
-        if (value < -99) {
-            value = -99;
-        }
-        int dig1 = int(value) * 10; // 210
-        int dig2 = int((value * 10) - dig1);
-        dig1 = dig1 / 10;
-        if (dig2 < 0) {
-            dig2 = dig2 * -1;
-        }
-        sprintf(output, "%02d.%2d", dig1, dig2);
-    }
 
 public:
 
@@ -499,11 +482,11 @@ public:
      * @param voltage
      */
     void showVoltages(float voltage) {
-        displayFloat(voltage, char3);
 #ifndef noDisplay
         u8g2.setCursor(2, lcdRow1);
         u8g2.print(F("V: "));
-        u8g2.print(char3);
+        sprintf(str, "%02d.%02d", (int) voltage, (int) (voltage * 100) % 100);
+        u8g2.print(str);
 #endif;
     }
 
@@ -515,12 +498,12 @@ public:
 #ifndef noDisplay
         u8g2.setCursor(2, lcdRow2);
         u8g2.print(F("A: "));
-        if (setAmps == 0) {
-            u8g2.print("Max");
-        } else {
-            displayFloat(amperage, char3);
-            u8g2.print(char3);
+        if (amperage < 0) {
+            amperage = 0;
         }
+        sprintf(str, "%01d.%03d", (int) amperage, (int) (amperage * 1000) % 1000);
+        u8g2.print(str);
+//        }
 #endif
 
     }
