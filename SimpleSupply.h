@@ -70,7 +70,7 @@ U8G2_SSD1306_128X32_UNIVISION_2_HW_I2C u8g2(U8G2_R2);
 
 class SimpleSupply {
     enum class tones {
-        none = 0, dir = 1, click = 2, hold = 3, low = 4, lows = 5
+        none = 0, dir = 1, click = 2, hold = 3, low = 4, lows = 5, alarm = 6
     };
     enum class menus {
         main = 0, sub = 1, power = 2
@@ -128,23 +128,14 @@ public:
     }
 
     void draw() {
-        rawTemp = analogRead(pinTempInp);
-        nowTemp = map(rawTemp, 385, 270, 370, 500) * 0.1;
         digitalWrite(pinBlinker, LOW);
         this->values();
         this->current();
-
+        this->temperature();
 #ifndef noDisplay
         u8g2.firstPage();
         do {
-            if (rawTemp > 280) {
-                showVoltages(outVolt);
-                if (menu == menus::sub) {
-                    showAmperage(outAmps);
-                } else {
-                    showAmperage(outAmps);
-                }
-            } else u8g2.print(F("OVERHEAT"));
+            this->meather();
         } while (u8g2.nextPage());
 
 #endif
@@ -189,6 +180,11 @@ private:
         avrIndex = 0, avrAmps = 0, avrVolt = 0;
         outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
         outAmps = map(rawAmps, 387, 633, 92, 150) * 0.001;
+    }
+
+    void temperature() {
+        rawTemp = analogRead(pinTempInp);
+        nowTemp = map(rawTemp, 385, 270, 370, 500) * 0.1;
     }
 
     /**
@@ -309,7 +305,6 @@ private:
         if (play == tones::low) {
             if (track(0)) sound(1300, 800);
             if (track(1)) mute();
-
         }
 
         if (play == tones::lows) {
@@ -317,7 +312,17 @@ private:
             if (track(1)) silent(100);
             if (track(2)) sound(1600, 520);
             if (track(3)) mute();
+        }
 
+        if (play == tones::alarm) {
+            if (track(0)) sound(1600, 500);
+            if (track(1)) silent(100);
+            if (track(2)) sound(1600, 500);
+            if (track(3)) silent(100);
+            if (track(4)) sound(1600, 500);
+            if (track(4)) silent(100);
+            if (track(6)) sound(1600, 500);
+            if (track(7)) mute();
         }
     }
 
@@ -454,13 +459,13 @@ private:
             blink();
             Serial.println();
             Serial.print(btnLowTime);
-            Serial.println(" Click ");
+            Serial.println(F(" Click "));
             btnLowTime = 0;
             btnStateReady = false;
         } else if (btnStateReady && btnLowTime > 1000 && btnLowTime) {
             Serial.println();
             Serial.print(btnLowTime);
-            Serial.println(" Hold ");
+            Serial.println(F(" Hold "));
             menu = (menu == menus::sub) ? menus::main : menus::sub;
             play = tones::hold;
             ping();
@@ -486,10 +491,21 @@ private:
 /**
  * UI
  */
+    void meather() {
+        if (rawTemp > 280) {
+            showVoltages(outVolt);
+            if (menu == menus::sub) {
+                showAmperage(setAmps);
+            } else {
+                showAmperage(outAmps);
+            }
+        } else {
+            u8g2.setCursor(2, lcdRow1);
+            u8g2.print(F("OVERHEAT"));
+            blink();
+        }
+    }
 
-
-
-public:
 
     /**
      * Shows voltage on screen
@@ -517,7 +533,6 @@ public:
         }
         sprintf(str, "%01d.%03d", (int) amperage, (int) (amperage * 1000) % 1000);
         u8g2.print(str);
-//        }
 #endif
 
     }
