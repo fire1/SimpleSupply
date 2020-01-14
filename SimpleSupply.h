@@ -135,7 +135,7 @@ public:
 #ifndef noDisplay
         u8g2.firstPage();
         do {
-            this->meather();
+            this->drawMain();
         } while (u8g2.nextPage());
 
 #endif
@@ -358,7 +358,6 @@ private:
  * @param pwm
  */
     void setPwm(uint8_t pwm) {
-
         if (pwm > 165) {
             pwm = 250;
         }
@@ -381,7 +380,6 @@ private:
  */
     void editor() {
         this->clicker();
-
         RotaryEncoder::Direction direction = enc.getDirection();
         //
         // Main menu (Home)
@@ -491,7 +489,7 @@ private:
 /**
  * UI
  */
-    void meather() {
+    void drawMain() {
         if (rawTemp > 280) {
             showVoltages(outVolt);
             if (menu == menus::sub) {
