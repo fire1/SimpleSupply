@@ -47,7 +47,8 @@ void static buttonInterrupt();
 volatile boolean btnStateReady = false;
 const uint8_t pinTone = 11;
 const uint8_t pinVoltPwm = 10;
-const uint8_t pinAmpsInp = A3; // from 0 to 150ma
+const uint8_t pinMAmpInp = A3; // from 0 to 150ma
+const uint8_t pinBAmpInp = A1; // from 0 to 150ma
 const uint8_t pinVoltInp = A2;
 const uint8_t pinTempInp = A0;
 const uint8_t pinEncoderA = 4;
@@ -61,7 +62,7 @@ const uint16_t refreshRate = 1450;
 const uint8_t lcdRow1 = 13;
 const uint8_t lcdRow2 = 29;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
-
+int refAmp = 0;
 
 RotaryEncoder enc(pinEncoderA, pinEncoderB);
 #ifndef noDisplay
@@ -83,11 +84,11 @@ class SimpleSupply {
     uint8_t pwmVolt = 0, lastPwm;
     uint16_t avrIndex = 0;
     uint16_t rawTemp = 0;
-    int rawVolt, rawAmps;
+    int rawVolt, rawMAmp, rawBAmp;
     float setVolt = 0, setAmps = 0, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
-    uint32_t avrAmps = 0, avrVolt = 0;
+    uint32_t avrMAmp = 0, avrVolt = 0, avrBАmp;
     volatile unsigned long timeout = 0;
     unsigned long soundTime = 0;
 
@@ -99,7 +100,8 @@ public:
         TCCR1B = TCCR1B & B11111000 | B00000010;    // set timer 1 divisor to     8 for PWM frequency of  3921.16 Hz
         Serial.println(F("Booting..."));
         pinMode(pinVoltInp, INPUT);
-        pinMode(pinAmpsInp, INPUT);
+        pinMode(pinMAmpInp, INPUT);
+        pinMode(pinBAmpInp, INPUT);
         pinMode(pinVoltPwm, OUTPUT);
         pinMode(pinTone, OUTPUT);
         pinMode(pinEncoderA, INPUT_PULLUP);
@@ -116,6 +118,7 @@ public:
         tone(pinTone, 2000);
         delay(150);
         tone(pinTone, 2400);
+        refAmp = analogRead(pinBAmpInp);
         delay(150);
         noTone(pinTone);
     }
@@ -149,14 +152,16 @@ private:
  * Parsing live values
  */
     void parser() {
-        uint32_t readVolt = 0, readAmps = 0;
+        uint32_t readVolt = 0, readMAmp = 0, readBAmp = 0;
         for (index = 0; index < 20; ++index) {
             readVolt += analogRead(pinVoltInp);
-            readAmps += analogRead(pinAmpsInp);
+            readMAmp += analogRead(pinMAmpInp);
+            readBAmp += analogRead(pinBAmpInp);
             delayMicroseconds(50);
         }
         avrVolt += readVolt / index;
-        avrAmps += readAmps / index;
+        avrMAmp += readMAmp / index;
+        avrBАmp += readBAmp / index;
         avrIndex++;
         if (lastPwm != pwmVolt) {
             // pwm 150 = 17V
@@ -176,10 +181,16 @@ private:
  */
     void values() {
         rawVolt = avrVolt / avrIndex;
-        rawAmps = avrAmps / avrIndex;
-        avrIndex = 0, avrAmps = 0, avrVolt = 0;
+        rawMAmp = avrMAmp / avrIndex;
+        rawBAmp = avrBАmp / avrIndex;
+
+        avrIndex = 0, avrMAmp = 0, avrVolt = 0;
         outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
-        outAmps = map(rawAmps, 387, 633, 92, 150) * 0.001;
+        if (rawMAmp < 630) {
+            outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
+        } else {
+            outAmps = map(rawBAmp, refAmp, 1024, 0, 3000) * 0.001;
+        }
     }
 
     void temperature() {
@@ -230,7 +241,7 @@ private:
         Serial.print(F(" V raw "));
         Serial.print(rawVolt);
         Serial.print(F(" A raw "));
-        Serial.print(rawAmps);
+        Serial.print(rawMAmp);
         Serial.print(F(" V out "));
         Serial.print(outVolt);
         Serial.print(F(" A out "));
