@@ -86,7 +86,7 @@ class SimpleSupply {
     uint16_t avrIndex = 0;
     uint16_t rawTemp = 0;
     int rawVolt, rawMAmp, rawBAmp;
-    float setVolt = 0, setAmps = 0, outVolt, outAmps, nowTemp;
+    float setVolt = 0, setAmps = 1.5, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
     uint32_t avrMAmp = 0, avrVolt = 0, avrBAmp = 0;
@@ -160,7 +160,7 @@ private:
             readVolt += analogRead(pinVoltInp);
             readMAmp += analogRead(pinMAmpInp);
             readBAmp += analogRead(pinBAmpInp);
-            delayMicroseconds(50);
+            delayMicroseconds(250);
         }
         avrVolt += readVolt / index;
         avrMAmp += readMAmp / index;
@@ -494,6 +494,7 @@ private:
     void current() {
         if (setAmps > 0 && outAmps > setAmps) {
             pwmVolt--;
+            return;
         }
 
         if (setAmps > 0 && outAmps < setAmps && outVolt < setVolt) {
