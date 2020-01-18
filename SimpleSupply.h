@@ -57,7 +57,8 @@ const uint8_t pinEncoderC = 2;
 const uint8_t pinBlinker = LED_BUILTIN;
 unsigned long time = 0, lastTime = 0;
 volatile unsigned long btnLowTime = 0;
-const uint16_t refreshRate = 1450;
+const uint16_t refreshRate = 850;
+const uint16_t controlRate = 10;
 
 const uint8_t lcdRow1 = 13;
 const uint8_t lcdRow2 = 29;
@@ -88,7 +89,7 @@ class SimpleSupply {
     float setVolt = 0, setAmps = 0, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
-    uint32_t avrMAmp = 0, avrVolt = 0, avrBАmp;
+    uint32_t avrMAmp = 0, avrVolt = 0, avrBAmp = 0;
     volatile unsigned long timeout = 0;
     unsigned long soundTime = 0;
 
@@ -128,12 +129,14 @@ public:
         this->inject();
         this->editor();
         this->sounds();
+        if (avrIndex > 15) {
+            this->values();
+            this->current();
+        }
     }
 
     void draw() {
         digitalWrite(pinBlinker, LOW);
-        this->values();
-        this->current();
         this->temperature();
 #ifndef noDisplay
         u8g2.firstPage();
@@ -161,7 +164,7 @@ private:
         }
         avrVolt += readVolt / index;
         avrMAmp += readMAmp / index;
-        avrBАmp += readBAmp / index;
+        avrBAmp += readBAmp / index;
         avrIndex++;
         if (lastPwm != pwmVolt) {
             // pwm 150 = 17V
@@ -182,15 +185,15 @@ private:
     void values() {
         rawVolt = avrVolt / avrIndex;
         rawMAmp = avrMAmp / avrIndex;
-        rawBAmp = avrBАmp / avrIndex;
+        rawBAmp = avrBAmp / avrIndex;
 
-        avrIndex = 0, avrMAmp = 0, avrVolt = 0;
+        avrIndex = 0, avrMAmp = 0, avrBAmp = 0, avrVolt = 0;
         outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
-        if (rawMAmp < 630) {
-            outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
-        } else {
-            outAmps = map(rawBAmp, refAmp, 1024, 0, 3000) * 0.001;
-        }
+//        if (rawMAmp < 620) {
+//            outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
+//        } else {
+        outAmps = map(rawBAmp, 514, 420, 0, 3000) * 0.001;
+//        }
     }
 
     void temperature() {
@@ -236,15 +239,17 @@ private:
 
         Serial.print(F(" V set "));
         Serial.print(setVolt);
-        Serial.print(F(" A set "));
+        Serial.print(F(" mA set "));
         Serial.print(setAmps);
         Serial.print(F(" V raw "));
         Serial.print(rawVolt);
-        Serial.print(F(" A raw "));
+        Serial.print(F(" mA raw "));
         Serial.print(rawMAmp);
+        Serial.print(F(" bA raw "));
+        Serial.print(rawBAmp);
         Serial.print(F(" V out "));
         Serial.print(outVolt);
-        Serial.print(F(" A out "));
+        Serial.print(F(" mA out "));
         Serial.print(outAmps);
         Serial.print(F(" PWM: "));
         Serial.print(pwmVolt);
