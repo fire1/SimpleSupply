@@ -71,6 +71,7 @@ U8G2_SSD1306_128X32_UNIVISION_2_HW_I2C u8g2(U8G2_R2);
 #endif
 
 class SimpleSupply {
+    boolean isOverheat = false;
     enum class tones {
         none = 0, dir = 1, click = 2, hold = 3, low = 4, lows = 5, alarm = 6
     };
@@ -86,7 +87,7 @@ class SimpleSupply {
     uint16_t avrIndex = 0;
     uint16_t rawTemp = 0;
     int rawVolt, rawMAmp, rawBAmp;
-    float setVolt = 0, setAmps = 1.5, outVolt, outAmps, nowTemp;
+    float setVolt = 0, setAmps = 0.5, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
     uint32_t avrMAmp = 0, avrVolt = 0, avrBAmp = 0;
@@ -119,8 +120,14 @@ public:
         tone(pinTone, 2000);
         delay(150);
         tone(pinTone, 2400);
-        refAmp = analogRead(pinBAmpInp);
-        delay(150);
+        //
+        // Calculate accurate current reference
+        uint32_t avrRefAmp = 0; // 514
+        for (index = 0; index < 15; ++index) {
+            avrRefAmp += analogRead(pinBAmpInp);
+            delay(10);
+        }
+        refAmp = avrRefAmp / 15;
         noTone(pinTone);
     }
 
@@ -170,7 +177,7 @@ private:
             // pwm 150 = 17V
             // max 160 = 18v
             // min 13 = 1.0v
-            if (rawTemp > 280) {
+            if (!isOverheat) {
                 analogWrite(pinVoltPwm, pwmVolt);
                 lastPwm = pwmVolt;
             } else {
@@ -189,16 +196,18 @@ private:
 
         avrIndex = 0, avrMAmp = 0, avrBAmp = 0, avrVolt = 0;
         outVolt = map(rawVolt, 93, 906, 180, 1700) * 0.01;
-//        if (rawMAmp < 620) {
-//            outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
-//        } else {
-        outAmps = map(rawBAmp, 514, 420, 0, 3000) * 0.001;
-//        }
+        if (rawMAmp < 610) {
+            outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
+        } else {
+//        outAmps = map(rawBAmp, 514, 420, 0, 3000) * 0.001;
+        outAmps = map(rawBAmp, refAmp, refAmp - 92, 0, 3000) * 0.001;
+        }
     }
 
     void temperature() {
         rawTemp = analogRead(pinTempInp);
         nowTemp = map(rawTemp, 385, 270, 370, 500) * 0.1;
+        isOverheat = rawTemp < 280;
     }
 
     /**
@@ -507,7 +516,7 @@ private:
  * UI
  */
     void drawMain() {
-        if (rawTemp > 280) {
+        if (!isOverheat) {
             showVoltages(outVolt);
             if (menu == menus::sub) {
                 showAmperage(setAmps);
