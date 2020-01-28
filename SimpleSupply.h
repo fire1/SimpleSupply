@@ -60,8 +60,8 @@ volatile unsigned long btnLowTime = 0;
 const uint16_t refreshRate = 850;
 const uint16_t controlRate = 10;
 
-const uint8_t lcdRow1 = 13;
-const uint8_t lcdRow2 = 29;
+const uint8_t lcdRow1 = 12;
+const uint8_t lcdRow2 = 32;
 const uint8_t lcdBar = 15;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 int refAmp = 0;
@@ -143,7 +143,7 @@ public:
         this->inject();
         this->editor();
         this->sounds();
-        if (avrIndex > 15) {
+        if (avrIndex > 5) {
             this->values();
             this->current();
         }
@@ -157,8 +157,8 @@ public:
         u8g2.firstPage();
         do {
             this->drawMain();
-            u8g2.drawFrame(3, lcdBar, 64, 3);
-            u8g2.drawLine(4, lcdBar - 1, 63, lcdBar - 1);
+            u8g2.drawFrame(3, lcdBar, 65, 3);
+            u8g2.drawLine(4, lcdBar + 1, 65, lcdBar + 1);
         } while (u8g2.nextPage());
 
 #endif
@@ -287,7 +287,7 @@ private:
 
     void ping() {
         timeout = millis();
-        setVolt = outVolt;
+
     }
 
     void blink() {
@@ -430,6 +430,7 @@ private:
                         Serial.println((int8_t) direction);
                         this->setPwm(this->changeVoltValue(direction));
                         edit = edits::vEdit;
+                        setVolt = outVolt;
                         ping();
                     }
                     break;
@@ -438,6 +439,7 @@ private:
                         play = tones::dir;
                         this->setPwm(this->changeVoltValue(direction, 1));
                         edit = edits::vHalf;
+                        setVolt = outVolt;
                         ping();
                     }
                     break;
@@ -554,9 +556,9 @@ private:
     void showVoltages(float voltage) {
 
         if (edit == edits::vHalf && this->isLcdBlink) {
-            sprintf(str, "%02d.  ", (int) voltage);
+            sprintf(str, "%02d.__", (int) voltage);
         } else if (edit == edits::vEdit && this->isLcdBlink) {
-            sprintf(str, "  .%02d", (int) (voltage * 100) % 100);
+            sprintf(str, "__.%02d", (int) (voltage * 100) % 100);
         } else {
             sprintf(str, "%02d.%02d", (int) voltage, (int) (voltage * 100) % 100);
         }
@@ -577,9 +579,9 @@ private:
             amperage = 0;
 
         if (edit == edits::aHalf && this->isLcdBlink) {
-            sprintf(str, "%01d.  ", (int) amperage);
+            sprintf(str, "%01d.___", (int) amperage);
         } else if (edit == edits::aEdit && this->isLcdBlink) {
-            sprintf(str, "  .%03d", (int) (amperage * 1000) % 1000);
+            sprintf(str, "_.%03d", (int) (amperage * 1000) % 1000);
         } else {
             sprintf(str, "%01d.%03d", (int) amperage, (int) (amperage * 1000) % 1000);
         }
