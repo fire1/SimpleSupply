@@ -62,6 +62,7 @@ const uint16_t controlRate = 10;
 
 const uint8_t lcdRow1 = 13;
 const uint8_t lcdRow2 = 29;
+const uint8_t lcdBar = 15;
 const uint8_t *defFont = u8g2_font_crox3h_tf;
 int refAmp = 0;
 
@@ -156,6 +157,8 @@ public:
         u8g2.firstPage();
         do {
             this->drawMain();
+            u8g2.drawFrame(3, lcdBar, 64, 3);
+            u8g2.drawLine(4, lcdBar - 1, 63, lcdBar - 1);
         } while (u8g2.nextPage());
 
 #endif
