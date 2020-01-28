@@ -287,6 +287,7 @@ private:
 
     void ping() {
         timeout = millis();
+        setVolt = outVolt;
     }
 
     void blink() {
