@@ -72,6 +72,11 @@ U8G2_SSD1306_128X32_UNIVISION_2_HW_I2C u8g2(U8G2_R2);
 
 class SimpleSupply {
     boolean isOverheat = false;
+    boolean isLcdBlink = false;
+    enum class edits {
+        none = 0, vEdit = 1, vHalf = 2, aEdit = 3, aHalf = 4
+    };
+
     enum class tones {
         none = 0, dir = 1, click = 2, hold = 3, low = 4, lows = 5, alarm = 6
     };
@@ -90,6 +95,7 @@ class SimpleSupply {
     float setVolt = 0, setAmps = 0.5, outVolt, outAmps, nowTemp;
     tones play = tones::none;
     menus menu = menus::main;
+    edits edit = edits::none;
     uint32_t avrMAmp = 0, avrVolt = 0, avrBAmp = 0;
     volatile unsigned long timeout = 0;
     unsigned long soundTime = 0;
@@ -145,6 +151,7 @@ public:
     void draw() {
         digitalWrite(pinBlinker, LOW);
         this->temperature();
+        this->isLcdBlink = !this->isLcdBlink;
 #ifndef noDisplay
         u8g2.firstPage();
         do {
@@ -200,7 +207,7 @@ private:
             outAmps = map(rawMAmp, 387, 633, 92, 150) * 0.001;
         } else {
 //        outAmps = map(rawBAmp, 514, 420, 0, 3000) * 0.001;
-        outAmps = map(rawBAmp, refAmp, refAmp - 92, 0, 3000) * 0.001;
+            outAmps = map(rawBAmp, refAmp, refAmp - 92, 0, 3000) * 0.001;
         }
     }
 
@@ -418,6 +425,7 @@ private:
                         play = tones::dir;
                         Serial.println((int8_t) direction);
                         this->setPwm(this->changeVoltValue(direction));
+                        edit = edits::vEdit;
                         ping();
                     }
                     break;
@@ -425,6 +433,7 @@ private:
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
                         this->setPwm(this->changeVoltValue(direction, 1));
+                        edit = edits::vHalf;
                         ping();
                     }
                     break;
@@ -445,6 +454,7 @@ private:
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
                         this->setCurrent(this->changeAmpsValue(direction, 0.1));
+                        edit = edits::aHalf;
                         ping();
                     }
                     break;
@@ -453,6 +463,7 @@ private:
                     if (direction != RotaryEncoder::Direction::NOROTATION) {
                         play = tones::dir;
                         this->setCurrent(this->changeAmpsValue(direction, 1));
+                        edit = edits::aEdit;
                         ping();
                     }
             }
@@ -469,6 +480,7 @@ private:
             menu = menus::main;
             play = tones::lows;
             timeout = 0;
+            edit = edits::none;
         }
 
     }
@@ -531,35 +543,50 @@ private:
     }
 
 
-    /**
-     * Shows voltage on screen
-     * @param voltage
-     */
+/**
+ * Shows voltage and edit cursors
+ * @param voltage
+ */
     void showVoltages(float voltage) {
+
+        if (edit == edits::vHalf && this->isLcdBlink) {
+            sprintf(str, "%02d.  ", (int) voltage);
+        } else if (edit == edits::vEdit && this->isLcdBlink) {
+            sprintf(str, "  .%02d", (int) (voltage * 100) % 100);
+        } else {
+            sprintf(str, "%02d.%02d", (int) voltage, (int) (voltage * 100) % 100);
+        }
+
 #ifndef noDisplay
         u8g2.setCursor(2, lcdRow1);
         u8g2.print(F("V: "));
-        sprintf(str, "%02d.%02d", (int) voltage, (int) (voltage * 100) % 100);
         u8g2.print(str);
-#endif;
+#endif
     }
 
-    /**
-     * Shows amperage on screen
-     * @param amperage
-     */
+/**
+ * Shows amperage and edit cursors
+ * @param amperage
+ */
     void showAmperage(float amperage) {
+        if (amperage < 0)
+            amperage = 0;
+
+        if (edit == edits::aHalf && this->isLcdBlink) {
+            sprintf(str, "%01d.  ", (int) amperage);
+        } else if (edit == edits::aEdit && this->isLcdBlink) {
+            sprintf(str, "  .%03d", (int) (amperage * 1000) % 1000);
+        } else {
+            sprintf(str, "%01d.%03d", (int) amperage, (int) (amperage * 1000) % 1000);
+        }
+
 #ifndef noDisplay
         u8g2.setCursor(2, lcdRow2);
         u8g2.print(F("A: "));
-        if (amperage < 0) {
-            amperage = 0;
-        }
-        sprintf(str, "%01d.%03d", (int) amperage, (int) (amperage * 1000) % 1000);
         u8g2.print(str);
 #endif
-
     }
+
 
 };
 
